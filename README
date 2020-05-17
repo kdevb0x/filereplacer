@@ -1,0 +1,21 @@
+simple program to search for a files absolute path given its name and root path
+to search recursively, and replace the file with another file.
+
+Runnable binaries for GOARCH="amd64" GOOS="windows" are tagged:
+"@v0.0.x_release_win"
+
+
+to compile and install:
+
+If you have a go toolchain installed you can just run
+
+"GO111MODULE=on go get github.com/kdevb0x/forGorgon"
+
+then
+
+"go install github.com/kdevb0x/forGorgon/cmd/filereplacer"
+
+
+Otherwise:
+
+ Use one of the provided binaries in the releases branch.
