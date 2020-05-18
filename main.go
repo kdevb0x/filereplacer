@@ -9,34 +9,8 @@ import (
 	"path/filepath"
 )
 
-var (
-	targetRoot      string
-	replacementRoot string
-)
+func init() {
 
-func parseArgs() {
-	usage := `filereplacer usage:
-
-filereplacer [target directory] [replacements root]
-
-  Where [target directory] is the root directory to search recursively for files
-matching filenames found by recursively searching [replacement root].
-
-Example:
-
-	filereplacer /tmp ~/tmp
-
-  Would recursively search for filenames in ~/tmp, and if they match any
-named files found by searching /tmp recursively, they are replaced by them.
-`
-
-	// check for help flags
-	switch os.Args[1] {
-	case "--help", "-h", "help", "-help":
-		fmt.Printf("%s\n", usage)
-		os.Exit(1)
-
-	}
 	// check arg lens
 	if len(os.Args) < 3 {
 		fmt.Println("wrong number of arguments!")
@@ -46,6 +20,34 @@ named files found by searching /tmp recursively, they are replaced by them.
 		os.Exit(1)
 	}
 
+}
+
+var (
+	targetRoot      string
+	replacementRoot string
+	usage           = `filereplacer usage:
+filereplacer [target directory] [replacements root]
+
+Where [target directory] is the root directory to search recursively for files
+matching filenames found by recursively searching [replacement root].
+
+Example:
+	filereplacer /tmp ~/tmp
+
+This command would recursively search for filenames inside of ~/tmp, and if any
+matching file names are found found (by searching /tmp recursively), the
+original files are replaced by them.
+`
+)
+
+func parseArgs() {
+	// check for help flags
+	switch os.Args[1] {
+	case "--help", "-h", "help", "-help":
+		fmt.Printf("%s\n", usage)
+		os.Exit(1)
+
+	}
 	// set the paths from the args
 	targetRoot = filepath.Clean(os.Args[1])
 	replacementRoot = filepath.Clean(os.Args[2])
