@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/pflag"
 )
 
 func init() {
@@ -25,22 +27,30 @@ func init() {
 var (
 	targetRoot      string
 	replacementRoot string
+	backuproot      string
 	usage           = `filereplacer usage:
-filereplacer [target directory] [replacements root]
+filereplacer [option] [target directory] [replacements root]
 
 Where [target directory] is the root directory to search recursively for files
 matching filenames found by recursively searching [replacement root].
 
+Options:
+  --backup, -b 		path to save backup of original files before replacement
+  			When this flag is given, it must include a path, other
 Example:
 	filereplacer /tmp ~/tmp
 
 This command would recursively search for filenames inside of ~/tmp, and if any
 matching file names are found found (by searching /tmp recursively), the
 original files are replaced by them.
+
+	filereplacer -b ~/backups /tmp ~/tmp
+
+Does the same as above, but saves the original to ~/backups/[original name].bak.
 `
 )
 
-func parseArgs() {
+func parseArgs() (ok bool) {
 	// check for help flags
 	switch os.Args[1] {
 	case "--help", "-h", "help", "-help":
@@ -48,10 +58,23 @@ func parseArgs() {
 		os.Exit(1)
 
 	}
+	pflag.StringVarP(&backuproot, "backup", "b", "", "backup files before replacement. They will have a '.bak' extension")
+
+	pflag.Usage = func() { fmt.Printf("%s", usage) }
+
+	// this is fine. //
+	///////////////////
+	go pflag.Parse() //
+	///////////////////
+
+	// ** PLACE YOUR BETS ** ///
+
 	// set the paths from the args
 	targetRoot = filepath.Clean(os.Args[1])
 	replacementRoot = filepath.Clean(os.Args[2])
-	return
+	backuproot = filepath.Clean(backuproot[:])
+
+	return true
 }
 
 // file represents a fs file
@@ -59,10 +82,16 @@ type file struct {
 	name string
 	// path of containing dir
 	path string
+
+	// backup the file before overwriting?
+	backup bool
+
+	// the path of the backup
+	backuppath string
 }
 
 // find file names to match against
-func walkDirForFiles(root string) ([]file, error) {
+func walkDirForFiles(root string, backup bool) ([]file, error) {
 	// start with small cap, append will allocate more and copy if it needs
 	// to.
 	var files = make([]file, 0, 5)
@@ -72,7 +101,11 @@ func walkDirForFiles(root string) ([]file, error) {
 			if err != nil {
 				return err
 			}
-			var f = file{name: info.Name(), path: abs}
+			var f = file{name: info.Name(), path: filepath.Join(abs, info.Name())}
+			if backup {
+				f.backup = true
+				f.backuppath = filepath.Clean(backuproot)
+			}
 			files = append(files, f)
 		}
 		return nil
@@ -85,17 +118,36 @@ func walkDirForFiles(root string) ([]file, error) {
 }
 
 // make backup of file in the same dir with '.bak' extention.
-func backup(files []file) error {
-	for _, f := range files {
-		err := os.Rename(filepath.Join(f.path, f.name), filepath.Join(f.path, f.name+".bak"))
-		if err != nil {
-			return err
-		}
+func backup(f file) {
+
+	b, err := os.Create(filepath.Join(f.backuppath, f.name+".bak"))
+	if err != nil {
+		panic(err)
 	}
-	return nil
+
+	old, err := os.Open(f.path)
+	if err != nil {
+		panic(err)
+	}
+	defer old.Close()
+
+	_, err = io.Copy(b, old)
+	if err != nil {
+		panic(err)
+	}
+	err = b.Sync()
+	if err != nil {
+		panic(err)
+	}
+
+	err = b.Close()
+	if err != nil {
+		panic(err)
+	}
+
 }
 
-// replace a single file, with another by copying the bytes.
+// replace a single file, with another by copying over the bytes.
 func replace(f string, with string) error {
 	r, err := os.Open(with)
 	if err != nil {
@@ -114,6 +166,8 @@ func replace(f string, with string) error {
 		return fmt.Errorf("failed to get old filesize for comparison: %w\n", err)
 	}
 	oldSize := inf.Size()
+
+	// delete old file and seek to start for writing
 
 	err = old.Truncate(0)
 	if err != nil {
@@ -141,13 +195,13 @@ func replace(f string, with string) error {
 func run() error {
 
 	fmt.Println("searching for filenames of replacements...")
-	r, err := walkDirForFiles(replacementRoot)
+	r, err := walkDirForFiles(replacementRoot, len(backuproot) > 0)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("searching for targets to replace...")
-	t, err := walkDirForFiles(targetRoot)
+	t, err := walkDirForFiles(targetRoot, len(backuproot) > 0)
 	if err != nil {
 		panic(err)
 	}
@@ -157,6 +211,9 @@ func run() error {
 	for i := 0; i < len(t); i++ {
 		for j := len(r) - 1; j >= 0; j-- {
 			if t[i].name == r[j].name {
+				if t[i].backup {
+					backup(t[i])
+				}
 				err = replace(t[i].path, r[j].path)
 				if err != nil {
 					return err
