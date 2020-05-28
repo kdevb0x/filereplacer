@@ -28,6 +28,7 @@ var (
 	targetRoot      string
 	replacementRoot string
 	backuproot      string
+	includeExt      bool
 	usage           = `filereplacer usage:
 filereplacer [option] [target directory] [replacements root]
 
@@ -59,6 +60,7 @@ func parseArgs() (ok bool) {
 
 	}
 	pflag.StringVarP(&backuproot, "backup", "b", "", "backup files before replacement. They will have a '.bak' extension")
+	pflag.BoolVarP(&includeExt, "ext", "i", true, "include file extension when comparing names")
 
 	pflag.Usage = func() { fmt.Printf("%s", usage) }
 
@@ -67,6 +69,7 @@ func parseArgs() (ok bool) {
 	go pflag.Parse() //
 	///////////////////
 
+	// who will win the race?
 	// ** PLACE YOUR BETS ** ///
 
 	// set the paths from the args
@@ -210,6 +213,9 @@ func run() error {
 
 	for i := 0; i < len(t); i++ {
 		for j := len(r) - 1; j >= 0; j-- {
+			if includeExt {
+				if t[i].name[:len(filepath.Ext(t[i].name))] == r[j].name[:len(filepath.Ext(r[j].name))]
+			}
 			if t[i].name == r[j].name {
 				if t[i].backup {
 					backup(t[i])

@@ -8,27 +8,82 @@ import (
 	"testing"
 )
 
-var (
-	bak1         []byte
-	bak2         []byte
-	targetPath1  string
-	targetPath2  string
-	replacePath1 string
-	replacePath2 string
-	bakdir       string
-)
 
-func cleanup() {
-	_ = os.Remove(targetPath1)
-	_ = os.Remove(targetPath2)
-	_ = os.Remove(bakdir)
-	_ = ioutil.WriteFile(targetPath1, bak1, 0644)
-	_ = ioutil.WriteFile(targetPath2, bak2, 0644)
+func cleanup(f testcase) {
+	os.Remove(f.origpath())
+	ioutil.WriteFile(f.origpath, f.saveorig, 0644)
 }
 
+type testcase struct {
+	origpath string
+	replacementpath string
+	backuppath string
+	size int64
+	saveorig []byte
+	cleanup func(testcase)
+
+}
+const (
+	targetRoot = "testdata/testroot"
+	replacementRoot = "testdata/replaceRoot"
+
+	blahPath = "testdata/testroot/rootsub1/blah.txt"
+	blahRePath = "testdata/replaceRoot/blah.txt"
+
+	bleepPath = "testdata/testroot/bleep.txt"
+	bleepRePath = "testdata/replaceRoot/another/bleep.txt"
+
+	backupDir = "testdata/backupdir"
+
+)
+
+func testcases(paths [][2]string) []testcase {
+	var c = make([]testcase, count)
+	for i := 0; i < len(paths); i++ {
+		var t testcase
+		t.origpath = paths[i][0]
+		t.replacementpath = paths[i][1]
+		t.backuppath = backupDir
+		t.size = filesize(t.origpath)
+		if t.size == -1 {
+			info, err := os.Stat(t.origpath)
+			if err != nil {
+				panic("failed to get filesize for comparison")
+			}
+			t.size = info.Size()
+		}
+
+
+		save, err := ioutil.ReadFile(t.origpath)
+		if err != nil {
+			panic(err)
+		}
+		t.saveorig = save
+		t.cleanup = cleanup(t)
+
+		c = append(c, t)
+	}
+	return c
+
+
+}
+
+func filesize(f string) int64 {
+	d, _ := os.Open(f)
+	if err != nil {
+		return -1
+	}
+	defer d.Close()
+	s, err := d.Stat()
+	if err != nil {
+		return -1
+	}
+	return s.Size()
+}
 func TestBackup(t *testing.T) {
 
 	// backuproot = "testdata/testbackups"
+	/*
 	targetPath1 = "testdata/testroot/rootsub1/blah.txt"
 	targetPath2 = "testdata/testroot/bleep.txt"
 	replacePath1 = "testdata/replaceRoot/blah.txt"
@@ -36,8 +91,10 @@ func TestBackup(t *testing.T) {
 
 	targetRoot = "testdata/testroot"
 	replacementRoot = "testdata/replaceRoot"
+	*/
 
-	abs, err := filepath.Abs("testdata/testbackups")
+	for _, c := range tests {
+	abs, err := filepath.Abs(c)
 	if err != nil {
 		t.Logf("error: %s\n", err.Error())
 	}
@@ -65,6 +122,7 @@ func TestBackup(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	var err error
+	var bak1, bak2 []byte
 	bak1, err = ioutil.ReadFile("testdata/testroot/rootsub1/blah.txt")
 	if err != nil {
 		panic(err)
@@ -74,23 +132,7 @@ func TestRun(t *testing.T) {
 		panic(err)
 	}
 
-	targetPath1 = "testdata/testroot/rootsub1/blah.txt"
-	targetPath2 = "testdata/testroot/bleep.txt"
-	replacePath1 = "testdata/replaceRoot/blah.txt"
-	replacePath2 = "testdata/replaceRoot/another/bleep.txt"
 
-	// size1 := len(bak1)
-
-	// size2 := len(bak2)
-
-	cleanup := func() {
-		_ = os.Remove(targetPath1)
-		_ = os.Remove(targetPath2)
-		_ = ioutil.WriteFile(targetPath1, bak1, 0644)
-		_ = ioutil.WriteFile(targetPath2, bak2, 0644)
-	}
-	targetRoot = "testdata/testroot"
-	replacementRoot = "testdata/replaceRoot"
 
 	// run the test
 	err = run()
